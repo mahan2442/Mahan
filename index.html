@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <!-- تنظیمات برای نمایش صحیح در موبایل و جلوگیری از زوم ناخواسته -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Neon Dodge Pro - Full Version</title>
+    <style>
+        :root { --neon-blue: #0ff; --neon-pink: #f0f; --bg: #050505; --gold: #ffd700; }
+        
+        /* جلوگیری از رفتارهای مزاحم در موبایل مثل انتخاب متن یا اسکرول ناخواسته */
+        * { touch-action: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+
+        body { 
+            margin: 0; background: var(--bg); color: white; font-family: Tahoma, sans-serif; 
+            display: flex; justify-content: center; align-items: center; 
+            height: 100vh; width: 100vw; overflow: hidden; 
+        }
+        
+        #game-container { 
+            position: relative; 
+            width: 100%; 
+            height: 100%; 
+            max-width: 800px; 
+            max-height: 500px; 
+            border: 2px solid #333; 
+            background: #000; 
+            overflow: hidden;
+        }
+
+        canvas { display: none; width: 100%; height: 100%; }
+
+        .overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: flex; justify-content: center; align-items: center; z-index: 10; }
+        .menu-card { background: #111; padding: 20px; border: 2px solid var(--neon-blue); border-radius: 15px; text-align: center; width: 85%; max-width: 300px; box-shadow: 0 0 20px var(--neon-blue); }
+        
+        input { width: 85%; padding: 12px; margin: 8px 0; border-radius: 8px; border: 1px solid #444; background: #222; color: white; text-align: center; outline: none; font-size: 16px; }
+        button { width: 90%; padding: 12px; margin-top: 10px; background: transparent; color: var(--neon-blue); border: 2px solid var(--neon-blue); cursor: pointer; font-weight: bold; border-radius: 8px; font-size: 16px; transition: 0.3s; }
+        button:active { background: var(--neon-blue); color: black; }
+
+        #hud { position: absolute; top: 15px; left: 15px; color: var(--neon-blue); font-size: 22px; font-weight: bold; pointer-events: none; z-index: 5; text-shadow: 0 0 10px var(--neon-blue); }
+        
+        /* پنل ادمین با استایل بهبود یافته */
+        #admin-panel { 
+            position: absolute; top: 40px; right: 10px; display: none; 
+            background: rgba(15, 15, 15, 0.98); border: 2px solid var(--gold); 
+            padding: 15px; z-index: 100; width: 200px; max-height: 300px; 
+            overflow-y: auto; box-shadow: 0 0 20px var(--gold); border-radius: 12px; 
+        }
+        .admin-trigger { 
+            position: absolute; bottom: 10px; right: 10px; background: rgba(255,215,0,0.1); 
+            border: 1px solid var(--gold); color: var(--gold); padding: 4px 8px; 
+            cursor: pointer; font-size: 10px; border-radius: 5px; z-index: 101; opacity: 0.5;
+        }
+
+        #admin-auth-modal { 
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(0,0,0,0.85); display: none; justify-content: center; align-items: center; z-index: 200; 
+        }
+
+        /* استایل لیست کاربران در ادمین */
+        .user-entry {
+            background: rgba(255,255,255,0.05);
+            margin-bottom: 8px;
+            padding: 8px;
+            border-radius: 6px;
+            font-size: 12px;
+            border-right: 3px solid var(--gold);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <div id="hud">Score: <span id="score-val">0</span></div>
+
+        <!-- پنل ادمین -->
+        <div id="admin-panel">
+            <h4 style="color:var(--gold); margin:0 0 10px 0; text-align: center; font-size:14px; border-bottom: 1px solid var(--gold); padding-bottom: 5px;">مدیریت کاربران</h4>
+            <div id="user-list"></div>
+            <button onclick="toggleAdmin()" style="background:none; color:var(--gold); border:1px solid var(--gold); padding:5px; width:100%; margin-top:10px; font-size:11px;">بستن پنل</button>
+        </div>
+
+        <button class="admin-trigger" onclick="requestAdminAccess()">ADMIN</button>
+
+        <!-- مودال ورود ادمین -->
+        <div id="admin-auth-modal">
+            <div class="menu-card" style="border-color: var(--gold); box-shadow: 0 0 20px var(--gold);">
+                <h3 style="color:var(--gold); margin-bottom:15px;">ورود مدیریت</h3>
+                <input type="password" id="admin-pass-input" placeholder="رمز عبور ادمین">
+                <button onclick="checkAdminPassword()" style="border-color: var(--gold); color: var(--gold);">تایید</button>
+                <button onclick="closeAdminModal()" style="border-color: #555; color: #aaa; font-size: 12px; margin-top: 5px;">انصراف</button>
+                <p id="admin-error" style="color:red; font-size:12px; margin-top:10px;"></p>
+            </div>
+        </div>
+
+        <!-- منوی شروع و ثبت نام -->
+        <div id="overlay" class="overlay">
+            <div class="menu-card">
+                <h2 style="color:var(--neon-pink); font-size:28px; margin-bottom:20px;">Neon Dodge</h2>
+                <input type="text" id="in-name" placeholder="نام کاربری">
+                <input type="password" id="in-pass" placeholder="رمز عبور">
+                <input type="text" id="in-phone" placeholder="شماره تماس (مثلاً 0912...)">
+                <button onclick="handleAuth()">شروع بازی</button>
+                <p id="msg" style="color:red; font-size:12px; margin-top:10px;"></p>
+            </div>
+        </div>
+
+        <canvas id="gameCanvas"></canvas>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const container = document.getElementById('game-container');
+        const overlay = document.getElementById('overlay');
+        const scoreVal = document.getElementById('score-val');
+        const msg = document.getElementById('msg');
+        const adminPanel = document.getElementById('admin-panel');
+        const adminModal = document.getElementById('admin-auth-modal');
+        const adminError = document.getElementById('admin-error');
+        const userListDiv = document.getElementById('user-list');
+
+        const ADMIN_SECRET = "admin123"; // رمز عبور ادمین
+
+        // مدیریت دیتابیس
+        let db = JSON.parse(localStorage.getItem('neon_users_db')) || [];
+        let currentUser = JSON.parse(localStorage.getItem('current_user'));
+
+        let gameRunning = false;
+        let score = 0;
+        let player = { x: 0, y: 0, r: 15 }; 
+        let enemies = [];
+        let enemyBaseSpeed = 4;
+
+        // ریسپانسیو کردن کانواس
+        function resizeCanvas() {
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+            if (!gameRunning) {
+                player.x = canvas.width / 2;
+                player.y = canvas.height / 2;
+            }
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // ورود خودکار اگر کاربر قبلاً لاگین کرده باشد
+        window.onload = () => {
+            if (currentUser) {
+                document.getElementById('in-name').value = currentUser.name;
+                document.getElementById('in-pass').value = currentUser.pass;
+                document.getElementById('in-phone').value = currentUser.phone || "";
+            }
+        };
+
+        function handleAuth() {
+            const name = document.getElementById('in-name').value.trim();
+            const pass = document.getElementById('in-pass').value.trim();
+            const phone = document.getElementById('in-phone').value.trim();
+
+            if (!name || !pass) { msg.innerText = "نام و رمز الزامی است"; return; }
+
+            let user = db.find(u => u.name === name);
+            if (user) {
+                if (user.pass === pass) {
+                    currentUser = user;
+                    localStorage.setItem('current_user', JSON.stringify(user));
+                    startGame();
+                } else { msg.innerText = "رمز اشتباه است!"; }
+            } else {
+                if (!phone) { msg.innerText = "وارد کردن شماره تماس الزامی است"; return; }
+                currentUser = { name, pass, phone, score: 0 };
+                db.push(currentUser);
+                saveDB();
+                startGame();
+            }
+        }
+
+        function saveDB() {
+            localStorage.setItem('neon_users_db', JSON.stringify(db));
+            localStorage.setItem('current_user', JSON.stringify(currentUser));
+        }
+
+        function startGame() {
+            overlay.style.display = 'none';
+            canvas.style.display = 'block';
+            gameRunning = true;
+            score = 0;
+            enemies = [];
+            scoreVal.innerText = "0";
+            resizeCanvas();
+            animate();
+        }
+
+        function animate() {
+            if (!gameRunning) return;
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // رسم بازیکن
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = '#0ff';
+            ctx.fillStyle = '#0ff';
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, player.r, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+
+            // تولید دشمنان
+            let spawnRate = 0.03 + (score / 10000); 
+            if (Math.random() < spawnRate) spawnEnemy();
+
+            // حرکت و رسم دشمنان
+            enemies.forEach((e, i) => {
+                e.x += e.vx;
+                e.y += e.vy;
+
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = '#f0f';
+                ctx.fillStyle = '#f0f';
+                ctx.beginPath();
+                ctx.arc(e.x, e.y, 12, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+
+                // برخورد
+                if (Math.hypot(e.x - player.x, e.y - player.y) < player.r + 12) {
+                    gameOver();
+                }
+
+                // خروج از صفحه و امتیازدهی
+                if (e.x < -50 || e.x > canvas.width + 50 || e.y < -50 || e.y > canvas.height + 50) {
+                    enemies.splice(i, 1);
+                    score += 10;
+                    scoreVal.innerText = score;
+                }
+            });
+            requestAnimationFrame(animate);
+        }
+
+        function spawnEnemy() {
+            const r = 12;
+            let x, y, vx, vy;
+            let side = Math.floor(Math.random() * 4);
+            let speed = enemyBaseSpeed + (score / 300); 
+
+            if (side === 0) { x = Math.random() * canvas.width; y = -r; vx = (Math.random() - 0.5) * 2; vy = speed; }
+            else if (side === 1) { x = Math.random() * canvas.width; y = canvas.height + r; vx = (Math.random() - 0.5) * 2; vy = -speed; }
+            else if (side === 2) { x = -r; y = Math.random() * canvas.height; vx = speed; vy = (Math.random() - 0.5) * 2; }
+            else { x = canvas.width + r; y = Math.random() * canvas.height; vx = -speed; vy = (Math.random() - 0.5) * 2; }
+
+            enemies.push({ x, y, vx, vy });
+        }
+
+        function gameOver() {
+            gameRunning = false;
+            if (score > currentUser.score) {
+                currentUser.score = score;
+                const idx = db.findIndex(u => u.name === currentUser.name);
+                if (idx !== -1) db[idx].score = score;
+                saveDB();
+            }
+            alert("Game Over! Your Score: " + score);
+            overlay.style.display = 'flex';
+            canvas.style.display = 'none';
+        }
+
+        // --- کنترل دوگانه: Mouse برای ویندوز و Touch برای اندروید ---
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            player.x = e.clientX - rect.left;
+            player.y = e.clientY - rect.top;
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault(); // جلوگیری از اسکرول شدن صفحه در موبایل
+            const rect = canvas.getBoundingClientRect();
+            const touch = e.touches[0];
+            player.x = touch.clientX - rect.left;
+            player.y = touch.clientY - rect.top;
+        }, { passive: false });
+
+        // --- مدیریت پنل ادمین ---
+        function requestAdminAccess() {
+            adminModal.style.display = 'flex';
+            adminError.innerText = "";
+        }
+
+        function closeAdminModal() {
+            adminModal.style.display = 'none';
+        }
+
+        function checkAdminPassword() {
+            const input = document.getElementById('admin-pass-input').value;
+            if (input === ADMIN_SECRET) {
+                adminModal.style.display = 'none';
+                toggleAdmin();
+            } else {
+                adminError.innerText = "رمز عبور نادرست!";
+            }
+        }
+
+        function toggleAdmin() {
+            if (adminPanel.style.display === 'block') {
+                adminPanel.style.display = 'none';
+            } else {
+                userListDiv.innerHTML = "";
+                if (db.length === 0) {
+                    userListDiv.innerHTML = "<p style='font-size:12px;'>کاربری یافت نشد.</p>";
+                } else {
+                    db.forEach(u => {
+                        // نمایش نام، شماره تلفن و امتیاز در پنل ادمین
+                        userListDiv.innerHTML += `
+                            <div class="user-entry">
+                                <strong>👤 ${u.name}</strong><br>
+                                <span style="color:#aaa;">📞 ${u.phone || '---'}</span><br>
+                                <span style="color:var(--gold);">🏆 ${u.score}</span>
+                            </div>`;
+                    });
+                }
+                adminPanel.style.display = 'block';
+            }
+        }
+    </script>
+</body>
+</html>
